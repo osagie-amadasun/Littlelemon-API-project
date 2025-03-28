@@ -17,7 +17,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
+from rest_framework.authtoken.views import obtain_auth_token
+
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('LittleLemonApp.urls'))
+    path('token/login/', obtain_auth_token, name='token_login'),
+    path('api/', include('LittleLemonApp.urls')),
+    path('auth/', include('djoser.urls')),
+    path('auth/', include('djoser.urls.authtoken')),
 ]

@@ -6,12 +6,67 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework.views import APIView
 
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.decorators import permission_classes
+
+from django.contrib.auth.models import User, Group
+
 
 
 # Create your views here.
-@api_view(['GET'])
-def home(request):
-    return Response({'message': 'Welcome to Little Lemon API'}, status=status.HTTP_200_OK)
+
+@api_view()
+@permission_classes([IsAuthenticated])
+def me(request):
+    return Response(request.user.email)
+
+
+@api_view(['GET', 'POST', 'DELETE'])
+@permission_classes([IsAdminUser])
+def managers(request):
+    managers = get_object_or_404(Group, name='manager') #---Ensures that the group exists
+    if request.method == 'GET':
+        managers_list = managers.user_set.all()
+        serialized_managers = UserSerializer(managers_list, many=True)
+        return Response({"managers" : serialized_managers.data}, status=status.HTTP_200_OK)
+    
+    elif request.method == 'POST':
+        username = request.data.get('username')
+        if username:
+            user = get_object_or_404(User, username=username)
+            managers = Group.objects.get(name='manager')
+            if request.method == 'POST':
+                managers.user_set.add(user)
+                return Response({'message': 'User added to managers group'}, status=status.HTTP_200_OK)
+            elif request.method == 'DELETE':
+                managers.user_set.remove(user)
+                return Response({'message' : 'User has been removed from managers group'})
+            return Response({'message': 'User successfully added to managers group'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'message': 'error'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAdminUser])
+def delete_manager(request, user_id):
+    managers = Group.objects.get(name='manager')
+    user = get_object_or_404(User, id=user_id)
+    if user:
+        managers.user_set.remove(user)
+        return Response({'message': 'User has been removed from managers group'}, status=status.HTTP_200_OK)
+    else:
+        return Response({'message': 'User does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view()
+@permission_classes([IsAdminUser])
+def delivery_crew(request):
+    delivery_crew = get_object_or_404(Group, name='Delivery crew')
+    delivery_crew_list = delivery_crew.user_set.all()
+    serialized_delivery_crew = UserSerializer(delivery_crew_list, many=True)
+    return Response({"Delivery crew" : serialized_delivery_crew.data}, status=status.HTTP_200_OK)
+
+
 
 
 @api_view(['GET', 'POST'])
@@ -30,7 +85,11 @@ def menu_items(request):
 
 
 @api_view(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
 def single_menu_item(request, menuItem):
     menu_item = get_object_or_404(MenuItem, id=menuItem)
     serialized_item = MenuItemsSerializer(menu_item)
     return Response(serialized_item.data, status=status.HTTP_200_OK)
+
+
+
