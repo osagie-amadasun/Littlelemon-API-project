@@ -21,7 +21,7 @@ def me(request):
     return Response(request.user.email)
 
 
-@api_view(['GET', 'POST', 'DELETE'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAdminUser])
 def managers(request):
     managers = get_object_or_404(Group, name='manager') #---Ensures that the group exists
@@ -32,18 +32,14 @@ def managers(request):
     
     elif request.method == 'POST':
         username = request.data.get('username')
-        if username:
-            user = get_object_or_404(User, username=username)
-            managers = Group.objects.get(name='manager')
-            if request.method == 'POST':
-                managers.user_set.add(user)
-                return Response({'message': 'User added to managers group'}, status=status.HTTP_200_OK)
-            elif request.method == 'DELETE':
-                managers.user_set.remove(user)
-                return Response({'message' : 'User has been removed from managers group'})
-            return Response({'message': 'User successfully added to managers group'}, status=status.HTTP_200_OK)
-        else:
-            return Response({'message': 'error'}, status=status.HTTP_400_BAD_REQUEST)
+        if not username:
+            return Response({'message': 'Please provide a valid username'}, status=status.HTTP_400_BAD_REQUEST)
+        user = get_object_or_404(User, username=username)
+        managers = Group.objects.get(name='manager')
+        managers.user_set.add(user)
+        return Response({'message': 'User added to managers group'}, status=status.HTTP_200_OK)
+    else:
+        return Response({'message': 'Something went wrong, Bad request'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['DELETE'])
@@ -58,13 +54,26 @@ def delete_manager(request, user_id):
         return Response({'message': 'User does not exist'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view()
+@api_view(['GET', 'POST'])
 @permission_classes([IsAdminUser])
 def delivery_crew(request):
     delivery_crew = get_object_or_404(Group, name='Delivery crew')
-    delivery_crew_list = delivery_crew.user_set.all()
-    serialized_delivery_crew = UserSerializer(delivery_crew_list, many=True)
-    return Response({"Delivery crew" : serialized_delivery_crew.data}, status=status.HTTP_200_OK)
+    if request.method == 'GET':
+        delivery_crew_list = delivery_crew.user_set.all()
+        serialized_delivery_crew = UserSerializer(delivery_crew_list, many=True)
+        return Response({"Delivery crew" : serialized_delivery_crew.data}, status=status.HTTP_200_OK)
+    elif request.method == 'POST':
+        username = request.data.get('username')
+        if username:
+            user = get_object_or_404(User, username=username)
+            delivery_crew = Group.objects.get(name='Delivery crew')
+            if request.method == 'POST':
+                delivery_crew.user_set.add(user)
+                return Response({'message': 'User added to delivery crew group'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'message': 'Please provide a valid username'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'message': 'error'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
