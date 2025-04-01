@@ -188,14 +188,12 @@ def cart(request):
     # Retrieve all cart items for the authenticated user
     cart_items = Cart.objects.filter(user=request.user)
     if request.method == 'GET':
-        # Make sure you have a CartSerializer defined
-        # from .serializers import CartSerializer
         serialized_cart = CartSerializer(cart_items, many=True)
         return Response(serialized_cart.data, status=status.HTTP_200_OK)
 
     elif request.method == 'POST':
         menu_item_id = request.data.get('menuitem')
-        quantity_str = request.data.get('quantity') # Keep as string for validation first
+        quantity_str = request.data.get('quantity')
 
         # --- Input Validation ---
         if not menu_item_id or not quantity_str:
@@ -207,7 +205,6 @@ def cart(request):
                 return Response({'message': 'Quantity must be a positive integer.'}, status=status.HTTP_400_BAD_REQUEST)
         except (ValueError, TypeError):
             return Response({'message': 'Invalid quantity format. Must be an integer.'}, status=status.HTTP_400_BAD_REQUEST)
-        # --- End Input Validation ---
 
         # Fetch the menu item
         # Use 'id' if menu_item_id is the primary key, or 'pk'
@@ -215,36 +212,34 @@ def cart(request):
 
         # --- Use update_or_create ---
         cart_item, created = Cart.objects.update_or_create(
-            user=request.user,      # Lookup field 1
-            menuitem=menu_item,     # Lookup field 2
-            defaults={              # Fields to set/update
+            user=request.user,
+            menuitem=menu_item,
+            defaults={
                 "quantity": quantity,
-                # Set unit_price from the MenuItem's price
                 "unit_price": menu_item.price,
-                # Calculate total price based on MenuItem's price and quantity
                 "price": menu_item.price * quantity
             }
         )
-        # --- End update_or_create ---
 
         if created:
             message = "Item added to cart successfully."
             status_code = status.HTTP_201_CREATED
         else:
             message = "Cart item quantity updated."
-            status_code = status.HTTP_200_OK # Update: 200 OK is conventional
+            status_code = status.HTTP_200_OK
 
         return Response({"message": message}, status=status_code)
 
     elif request.method == 'DELETE':
-        # Delete all cart items for the current user
         Cart.objects.filter(user=request.user).delete()
         return Response({"message": "All items removed from cart"}, status=status.HTTP_204_NO_CONTENT)
 
 
 
+#-----------------------ORDER MANAGEMENT SECTION----------
 @api_view(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated])
+@throttle_classes([UserRateThrottle])
 def order_list(request):
     if request.method == 'GET':
         #RBAC management
@@ -256,6 +251,38 @@ def order_list(request):
             orders = Order.objects.filter(delivery_crew=request.user)
         else:
             return Response({'message': 'You are not authorized to perform this action'}, status=status.HTTP_403_FORBIDDEN)
+        
+        #Filtering and searching block
+        category_slug = request.query_params.get('category')
+        price = request.query_params.get('to_price')
+        search = request.query_params.get('search')
+        ordering = request.query_params.get('ordering')
+
+        #Pagination block
+        perpage = request.query_params.get('perpage', default=10)
+        page = request.query_params.get('page', default=1)
+
+        #Filtering conditionals
+        if  category_slug:
+            menu_items = menu_items.filter(category__slug__exact=category_slug)
+        if  price:
+            try:
+                menu_items = menu_items.filter(price__lte=float(price))
+            except ValueError:
+                return Response({'message': 'Invalid price format. Must be a float.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if  search:
+            menu_items = menu_items.filter(title__icontains=search)
+
+        if ordering:
+            menu_items = menu_items.order_by(ordering)
+
+        #Paginator conditional and error handling
+        Paginator = Paginator(menu_items, per_page=perpage)
+        try:
+            menu_items = Paginator.page(number=page)
+        except EmptyPage:
+            menu_items = []
         
         serialized_orders = OrderSerializer(orders, many=True)
         return Response(serialized_orders.data, status=status.HTTP_200_OK)
