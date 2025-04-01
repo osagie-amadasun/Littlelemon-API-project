@@ -5,14 +5,15 @@ from .serializers import *
 from .permissions import *
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.views import APIView
 
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
-from rest_framework.decorators import permission_classes
 
 from django.contrib.auth.models import User, Group
+from django.core.paginator import Paginator, EmptyPage
 
+from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 
 
 # Create your views here.
@@ -95,8 +96,44 @@ def delete_delivery_crew(request, userId):
 #-----------------------MENU ITEMS SECTION------------------------
 @api_view(['GET', 'POST', 'PUT', 'PATCH' ,'DELETE'])
 @permission_classes([IsAuthenticated])
+@throttle_classes([UserRateThrottle, AnonRateThrottle])
 def menu_items(request):
-    menu_items = MenuItem.objects.all()
+    menu_items = MenuItem.objects.select_related('category').all()
+    
+    #Filtering and searching block
+    category_slug = request.query_params.get('category')
+    price = request.query_params.get('to_price')
+    search = request.query_params.get('search')
+    ordering = request.query_params.get('ordering')
+    
+    #Pagination block
+    perpage = request.query_params.get('perpage', default=10)
+    page = request.query_params.get('page', default=1)
+    
+    #Filtering conditionals
+    if  category_slug:
+        menu_items = menu_items.filter(category__slug__exact=category_slug)
+    if  price:
+        try:
+            menu_items = menu_items.filter(price__lte=float(price))
+        except ValueError:
+            return Response({'message': 'Invalid price format. Must be a float.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if  search:
+        menu_items = menu_items.filter(title__icontains=search)
+    
+    if ordering:
+        menu_items = menu_items.order_by(ordering)
+    
+    #Paginator conditional and error handling
+    Paginator = Paginator(menu_items, per_page=perpage)
+    try:
+        menu_items = Paginator.page(number=page)
+    except EmptyPage:
+        menu_items = []
+
+
+    
     if request.method == 'GET':
         serialized_items = MenuItemsSerializer(menu_items, many=True)
         return Response(serialized_items.data, status=status.HTTP_200_OK)
