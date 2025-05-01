@@ -8,7 +8,6 @@ class MenuItemsSerializer(serializers.ModelSerializer):
          model = MenuItem
          fields = ['id', 'title', 'price', 'featured', 'category']
 
-
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
