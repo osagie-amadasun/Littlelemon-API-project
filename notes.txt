@@ -3,3 +3,5 @@ superuser: username- osagieamadasun, password- rachmaninoff(in fact, the passwor
 delivery crew: efeamadasun, osazeamadasun
 
 managers: samultman, osagieamadasun
+
+normal users: rebecca, johnamadasun, isokenamadasun
