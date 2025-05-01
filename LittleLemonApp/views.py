@@ -98,54 +98,63 @@ def delete_delivery_crew(request, userId):
 @permission_classes([IsAuthenticated])
 @throttle_classes([UserRateThrottle, AnonRateThrottle])
 def menu_items(request):
+    # Initialize menu_items queryset
     menu_items = MenuItem.objects.select_related('category').all()
     
-    #Filtering and searching block
+    # Filtering and searching block
     category_slug = request.query_params.get('category')
     price = request.query_params.get('to_price')
     search = request.query_params.get('search')
     ordering = request.query_params.get('ordering')
     
-    #Pagination block
-    perpage = request.query_params.get('perpage', default=10)
-    page = request.query_params.get('page', default=1)
-    
-    #Filtering conditionals
-    if  category_slug:
+    # Filtering conditionals
+    if category_slug:
         menu_items = menu_items.filter(category__slug__exact=category_slug)
-    if  price:
+    if price:
         try:
             menu_items = menu_items.filter(price__lte=float(price))
         except ValueError:
-            return Response({'message': 'Invalid price format. Must be a float.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    if  search:
+            return Response({'message': 'Invalid price format. Must be a float.'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+    if search:
         menu_items = menu_items.filter(title__icontains=search)
-    
     if ordering:
         menu_items = menu_items.order_by(ordering)
-    
-    #Paginator conditional and error handling
-    Paginator = Paginator(menu_items, per_page=perpage)
-    try:
-        menu_items = Paginator.page(number=page)
-    except EmptyPage:
-        menu_items = []
 
-
-    
+    # Handle GET requests with pagination
     if request.method == 'GET':
-        serialized_items = MenuItemsSerializer(menu_items, many=True)
+        # Pagination parameters
+        perpage = request.query_params.get('perpage', default=10)
+        page = request.query_params.get('page', default=1)
+        
+        try:
+            perpage = int(perpage)
+            page = int(page)
+        except ValueError:
+            return Response({'message': 'Invalid pagination parameters'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create paginator instance
+        paginator = Paginator(menu_items, per_page=perpage)
+        
+        try:
+            paginated_items = paginator.page(number=page)
+        except EmptyPage:
+            paginated_items = []
+        
+        serialized_items = MenuItemsSerializer(paginated_items, many=True)
         return Response(serialized_items.data, status=status.HTTP_200_OK)
+
+    # Handle other HTTP methods
     elif request.method == 'POST':
         if not is_manager(request.user):
-            return Response({'message': 'You are not authorized to perform this action'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'message': 'You are not authorized'}, 
+                          status=status.HTTP_403_FORBIDDEN)
         
-        serialzer = MenuItemsSerializer(data=request.data)
-        if serialzer.is_valid():
-            serialzer.save()
-            return Response(serialzer.data, status=status.HTTP_201_CREATED)
-        return Response(serialzer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = MenuItemsSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response({'message' : 'There was an issue getting the items on the menu'})
 
 
@@ -278,9 +287,9 @@ def order_list(request):
             menu_items = menu_items.order_by(ordering)
 
         #Paginator conditional and error handling
-        Paginator = Paginator(menu_items, per_page=perpage)
+        paginator = paginator(menu_items, per_page=perpage)
         try:
-            menu_items = Paginator.page(number=page)
+            menu_items = paginator.page(number=page)
         except EmptyPage:
             menu_items = []
         
