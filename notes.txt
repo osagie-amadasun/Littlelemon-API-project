@@ -1,3 +1,5 @@
 superuser: username- osagieamadasun, password- rachmaninoff(in fact, the password for every single user is the exact same)
 
+delivery crew: efeamadasun, osazeamadasun
 
+managers: samultman, osagieamadasun
