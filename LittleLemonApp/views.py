@@ -27,7 +27,7 @@ def me(request):
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def managers(request):
-    managers = get_object_or_404(Group, name='manager') #---Ensures that the group exists
+    managers = get_object_or_404(Group, name='Manager') #---Ensures that the group exists
     if request.method == 'GET':
         managers_list = managers.user_set.all()
         serialized_managers = UserSerializer(managers_list, many=True)
@@ -38,7 +38,7 @@ def managers(request):
         if not username:
             return Response({'message': 'Please provide a valid username'}, status=status.HTTP_400_BAD_REQUEST)
         user = get_object_or_404(User, username=username)
-        managers = Group.objects.get(name='manager')
+        managers = Group.objects.get(name='Manager')
         managers.user_set.add(user)
         return Response({'message': 'User added to managers group'}, status=status.HTTP_201_CREATED)
     else:
@@ -251,7 +251,7 @@ def cart(request):
 @throttle_classes([UserRateThrottle])
 def order_list(request):
     if request.method == 'GET':
-        #RBAC management
+        # RBAC management
         if is_customer(request.user):
             orders = Order.objects.filter(user=request.user)
         elif is_manager(request.user):
@@ -259,45 +259,46 @@ def order_list(request):
         elif is_delivery_crew(request.user):
             orders = Order.objects.filter(delivery_crew=request.user)
         else:
-            return Response({'message': 'You are not authorized to perform this action'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'message': 'You are not authorized'}, status=status.HTTP_403_FORBIDDEN)
         
-        #Filtering and searching block
-        category_slug = request.query_params.get('category')
-        price = request.query_params.get('to_price')
+        # Filtering and searching block
         search = request.query_params.get('search')
         ordering = request.query_params.get('ordering')
+        status_filter = request.query_params.get('status')
 
-        #Pagination block
+        # Filtering conditionals
+        if search:
+            orders = orders.filter(id__icontains=search)  # or other field to search
+        
+        if status_filter:
+            orders = orders.filter(status=status_filter)
+        
+        if ordering:
+            orders = orders.order_by(ordering)
+
+        # Pagination block
         perpage = request.query_params.get('perpage', default=10)
         page = request.query_params.get('page', default=1)
 
-        #Filtering conditionals
-        if  category_slug:
-            menu_items = menu_items.filter(category__slug__exact=category_slug)
-        if  price:
-            try:
-                menu_items = menu_items.filter(price__lte=float(price))
-            except ValueError:
-                return Response({'message': 'Invalid price format. Must be a float.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if  search:
-            menu_items = menu_items.filter(title__icontains=search)
-
-        if ordering:
-            menu_items = menu_items.order_by(ordering)
-
-        #Paginator conditional and error handling
-        paginator = paginator(menu_items, per_page=perpage)
         try:
-            menu_items = paginator.page(number=page)
-        except EmptyPage:
-            menu_items = []
+            perpage = int(perpage)
+            page = int(page)
+        except ValueError:
+            return Response({'message': 'Invalid pagination parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create paginator instance
+        paginator = Paginator(orders, per_page=perpage)
         
-        serialized_orders = OrderSerializer(orders, many=True)
+        try:
+            paginated_orders = paginator.page(number=page)
+        except EmptyPage:
+            paginated_orders = []
+        
+        serialized_orders = OrderSerializer(paginated_orders, many=True)
         return Response(serialized_orders.data, status=status.HTTP_200_OK)
     
     elif request.method == 'POST':
-        #RBAC management
+        # RBAC management - existing POST logic remains the same
         if is_customer(request.user):
             cart_items = Cart.objects.filter(user=request.user)
             if not cart_items:
@@ -318,7 +319,7 @@ def order_list(request):
             serializer = OrderSerializer(order)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         else:
-            return Response({'message': 'You are not authorized to perform this action'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'message': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
         
 
 
